@@ -1,56 +1,321 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Poker Coach Standalone</title>
-  <script src="https://unpkg.com/react@17/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gradient-to-br from-green-900 to-blue-900 text-white min-h-screen">
-  <div id="root"></div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Poker Coach – Canvas Edition</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      html, body, #root { height: 100%; }
+      @keyframes fall { 0% { transform: translateY(0) } 100% { transform: translateY(110vh) rotate(360deg); opacity: 0 } }
+    </style>
+  </head>
+  <body class="bg-gradient-to-br from-[#062b20] via-[#0c2b44] to-[#081a2b] text-slate-100">
+    <div id="root" class="h-full"></div>
 
-  <script type="text/babel" data-presets="react,env">
-    const { useState } = React;
+    <script type="text/babel" data-presets="react,env">
+      const { useMemo, useState, useEffect } = React;
 
-    function App() {
-      const [progress, setProgress] = useState({lesson: 1, scenario: 0, completed: []});
+      const STORAGE_KEY = "pokerCoachCanvasProgressV1";
+      const loadProgress = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; } };
+      const saveProgress = (p) => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(p)); } catch {} };
 
-      return (
-        <div className="p-6 max-w-4xl mx-auto">
-          <header className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold">Poker Coach</h1>
-            <span>Lesson {progress.lesson}</span>
-          </header>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="p-4 bg-green-800 rounded-2xl shadow">
-              <h2 className="text-xl mb-2">Theory</h2>
-              <p>Positions go clockwise: BTN → SB → BB → UTG → UTG+1 → MP → MP+1 → CO → BTN</p>
-              <div className="mt-4 p-2 bg-green-700 rounded text-sm">Seating Order Hint: BTN → SB → BB → UTG → UTG+1 → MP → MP+1 → CO → BTN</div>
-            </div>
-
-            <div className="p-4 bg-green-800 rounded-2xl shadow">
-              <h2 className="text-xl mb-2">Practice</h2>
-              <p>Scenario: You are 2 seats clockwise from BTN. Where are you?</p>
-              <ul className="mt-4 space-y-2">
-                {['SB','BB','UTG','CO'].map((pos) => (
-                  <li key={pos}>
-                    <button onClick={() => alert(pos === 'BB' ? '✅ Correct!' : '❌ Try again')} className="w-full p-2 rounded bg-green-600 hover:bg-green-500">
-                      {pos}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
+      function Confetti({ show }) {
+        if (!show) return null;
+        return (
+          <div className="fixed inset-0 pointer-events-none z-50">
+            {Array.from({ length: 26 }).map((_, i) => (
+              <span key={i} className="absolute" style={{ left: `${Math.random()*100}%`, top: `-${Math.random()*20+10}%`, fontSize: `${Math.random()*18+14}px`, animation: `fall 1200ms ease-in-out ${Math.random()*400}ms both` }}>{i%3===0?"🎉":i%3===1?"🎊":"🏆"}</span>
+            ))}
           </div>
-        </div>
-      );
-    }
+        );
+      }
 
-    ReactDOM.render(<App />, document.getElementById('root'));
-  </script>
-</body>
+      function GlossaryBlock({ items }) {
+        return (
+          <div className="mt-5 bg-black/30 border border-white/10 rounded-lg p-4">
+            <h3 className="text-sm font-semibold mb-2">Glossary – Terms used in this lesson</h3>
+            <ul className="text-xs space-y-1 list-disc pl-5">
+              {items.map((g,i)=> <li key={i}><b>{g.term}</b>: {g.def}</li>)}
+            </ul>
+          </div>
+        );
+      }
+
+      function LessonHeader({ lesson, answered, total, pct }){
+        return (
+          <>
+            <h2 className="text-lg font-semibold mb-1">{lesson.title}</h2>
+            <div className="text-xs text-slate-300 mb-2">Lesson {answered}/{total} ({pct}%)</div>
+            <div className="h-1.5 rounded bg-white/10 overflow-hidden mb-4"><div className="h-full bg-indigo-500" style={{ width: `${pct}%` }} /></div>
+            <div className="mb-4"><span className="inline-flex items-center gap-2 bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 rounded-xl px-3 py-2 text-sm"><span>✨ Simple Rule</span><span className="text-slate-200">{lesson.simpleRule}</span></span></div>
+            <ul className="space-y-2 mb-4 text-sm">{lesson.bullets.map((b, idx) => (<li key={idx} className="flex items-start gap-2"><span className="mt-1">•</span><span>{b}</span></li>))}</ul>
+            <p className="text-sm text-slate-200 whitespace-pre-line">{lesson.explanation}</p>
+          </>
+        );
+      }
+
+      function App(){
+        const [progress, setProgress] = useState(loadProgress());
+        const [activeLessonIdx, setActiveLessonIdx] = useState(0);
+        const [activeScenarioIdx, setActiveScenarioIdx] = useState(0);
+        const [selected, setSelected] = useState(null);
+        const [submitted, setSubmitted] = useState(false);
+        const [celebrate, setCelebrate] = useState(false);
+
+        useEffect(()=> saveProgress(progress), [progress]);
+
+        const lessons = useMemo(()=>buildLessons(), []);
+        const lesson = lessons[activeLessonIdx];
+        const scenarios = lesson.scenarios;
+        const sc = scenarios[activeScenarioIdx];
+        const lprog = progress[lesson.id] || {};
+        const answeredCount = Object.values(lprog).filter(s=>s.answered).length;
+        const totalInLesson = scenarios.length;
+        const pct = Math.round((answeredCount/totalInLesson)*100);
+
+        useEffect(()=>{ const prior = progress[lesson.id]?.[sc.id]; setSelected(prior?.selectedChoiceId || null); setSubmitted(!!prior?.answered); }, [activeLessonIdx, activeScenarioIdx]);
+        useEffect(()=>{ if(answeredCount>=totalInLesson){ setCelebrate(true); const t=setTimeout(()=>setCelebrate(false), 1200); return ()=>clearTimeout(t);} }, [answeredCount, totalInLesson]);
+
+        const totalScenarios = lessons.reduce((s, L)=> s + L.scenarios.length, 0);
+        const totalAnswered = Object.values(progress).reduce((a, lp)=> a + Object.values(lp).filter(s=>s.answered).length, 0);
+        const globalPct = Math.round((totalAnswered/totalScenarios)*100);
+
+        function selectChoice(id){ if(!submitted) setSelected(id); }
+        function submit(){ if(!selected || submitted) return; const choice = sc.choices.find(c=>c.id===selected); const correct = !!choice?.correct; const next = { ...progress, [lesson.id]: { ...(progress[lesson.id]||{}), [sc.id]: { answered: true, correct, selectedChoiceId: selected } } }; setProgress(next); setSubmitted(true); }
+        function reset(){ const next={...progress}; if(!next[lesson.id]) next[lesson.id]={}; delete next[lesson.id][sc.id]; setProgress(next); setSelected(null); setSubmitted(false); }
+        function goNext(){ if(activeScenarioIdx<scenarios.length-1) setActiveScenarioIdx(s=>s+1); else if(activeLessonIdx<lessons.length-1){ setActiveLessonIdx(l=>l+1); setActiveScenarioIdx(0);} }
+        function goPrev(){ if(activeScenarioIdx>0) setActiveScenarioIdx(s=>s-1); else if(activeLessonIdx>0){ const p=activeLessonIdx-1; setActiveLessonIdx(p); setActiveScenarioIdx(lessons[p].scenarios.length-1);} }
+
+        return (
+          <div className="min-h-full">
+            <Confetti show={celebrate} />
+            <header className="px-4 sm:px-6 py-4 border-b border-white/10 bg-black/20 backdrop-blur flex items-center justify-between sticky top-0 z-10">
+              <div>
+                <h1 className="text-xl sm:text-2xl font-semibold">Interactive Poker Coach</h1>
+                <p className="text-[11px] sm:text-xs text-slate-300">No maths—patterns and heuristics. Clockwise: BTN → SB → BB → UTG → UTG+1 → MP → MP+1 → CO → BTN</p>
+              </div>
+              <div className="w-40 sm:w-56">
+                <div className="text-[11px] mb-1">Overall {totalAnswered}/{totalScenarios} ({globalPct}%)</div>
+                <div className="h-2 rounded bg-white/10 overflow-hidden"><div className="h-full bg-emerald-500" style={{ width: `${globalPct}%` }} /></div>
+              </div>
+            </header>
+
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex gap-2 flex-wrap">
+              {lessons.map((L, i)=>{ const lp = progress[L.id]||{}; const done = Object.values(lp).filter(s=>s.answered).length >= L.scenarios.length; return (
+                <button key={L.id} onClick={()=>{setActiveLessonIdx(i); setActiveScenarioIdx(0);}} className={`relative w-8 h-8 rounded-full grid place-items-center text-xs ${i===activeLessonIdx?"bg-sky-600":"bg-white/10 hover:bg-white/20"}`} title={`${i+1}. ${L.title}`}>{i+1}{done && <span className="absolute -right-1 -top-1 text-[10px]">🏆</span>}</button>
+              );})}
+            </div>
+
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 pb-16 grid md:grid-cols-2 gap-6">
+              <section className="bg-white/5 border border-white/10 rounded-2xl p-5 sm:p-6">
+                <LessonHeader lesson={lesson} answered={answeredCount} total={totalInLesson} pct={pct} />
+                <GlossaryBlock items={lesson.glossary} />
+              </section>
+
+              <section className="bg-white/5 border border-white/10 rounded-2xl p-5 sm:p-6">
+                <div className="flex items-center justify-between mb-2"><h3 className="text-base font-semibold">Practice</h3><div className="text-sm text-slate-300">Scenario {activeScenarioIdx+1} of {scenarios.length}</div></div>
+                <div className="bg-black/30 border border-white/10 rounded-xl p-4">
+                  <div className="text-sm font-medium mb-2">{sc.prompt}</div>
+                  {sc.note && <div className="text-xs text-slate-300 mb-3">{sc.note}</div>}
+                  <div className="mb-3 inline-flex items-center gap-2 text-[11px] px-2 py-1 rounded-full border border-white/15 bg-white/5 text-slate-200">
+                    <span>Seating Order</span>
+                    <span className="opacity-80">BTN → SB → BB → UTG → UTG+1 → MP → MP+1 → CO → BTN</span>
+                  </div>
+                  <div className="space-y-2">
+                    {sc.choices.map((c)=>{ const isSel = selected===c.id; let cls = "w-full text-left px-3 py-3 rounded-lg border bg-white/5 hover:bg-white/10 border-white/10"; if(submitted && isSel && c.correct) cls = "w-full text-left px-3 py-3 rounded-lg border bg-emerald-900/40 border-emerald-500"; if(submitted && isSel && !c.correct) cls = "w-full text-left px-3 py-3 rounded-lg border bg-rose-900/40 border-rose-500"; if(submitted && !isSel && c.correct) cls = "w-full text-left px-3 py-3 rounded-lg border bg-emerald-900/10 border-emerald-700/50"; if(!submitted && isSel) cls = "w-full text-left px-3 py-3 rounded-lg border bg-sky-900/40 border-sky-600"; return (
+                      <div key={c.id}>
+                        <button className={cls} onClick={()=>{ if(!submitted) setSelected(c.id) }} disabled={submitted}>
+                          <div className="flex items-start justify-between gap-3"><span>{c.text}</span>{submitted && (<span className="text-xl">{c.correct?"✅":isSel?"❌":""}</span>)}</div>
+                        </button>
+                        {submitted && (<div className={`mt-1 text-xs rounded-md px-3 py-2 border ${c.correct?"bg-emerald-800/20 border-emerald-600/40 text-emerald-200":"bg-rose-800/10 border-rose-600/30 text-rose-200"}`}>{c.why}</div>)}
+                      </div>
+                    );})}
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <button className={`px-4 py-2 rounded-lg font-medium border ${selected&&!submitted?"bg-sky-600 hover:bg-sky-500 border-sky-300":"bg-slate-700/50 border-white/10 text-slate-300 cursor-not-allowed"}`} onClick={submit} disabled={!selected||submitted}>Submit</button>
+                    <button className="px-4 py-2 rounded-lg font-medium border bg-white/5 hover:bg-white/10 border-white/10" onClick={reset}>Reset</button>
+                    <div className="ml-auto flex items-center gap-2"><button onClick={goPrev} className="px-3 py-2 rounded-lg border bg-white/5 hover:bg-white/10 border-white/10">Prev</button><button onClick={goNext} className="px-3 py-2 rounded-lg border bg-white/5 hover:bg-white/10 border-white/10">Next</button></div>
+                  </div>
+                  {answeredCount>=totalInLesson && (<div className="mt-4 p-3 text-sm rounded-lg bg-emerald-900/30 border border-emerald-600/30">Lesson complete! 🏆</div>)}
+                </div>
+              </section>
+            </main>
+          </div>
+        );
+      }
+
+      // Build lessons with full per-lesson glossary
+      function buildLessons(){
+        const L = [];
+        // 1. Position Names & Visual Recognition
+        L.push({
+          id: "pos-visual",
+          title: "Position Names & Visual Recognition",
+          simpleRule: "Earlier position = tighter; later = wider and more aggressive.",
+          bullets: [
+            "Clockwise seating with Button before the blinds.",
+            "Memorise: BTN → SB → BB → UTG → UTG+1 → MP → MP+1 → CO → BTN.",
+            "Acting later gives you more info; acting first demands stronger hands.",
+            "Blinds are out-of-position postflop—defend selectively.",
+          ],
+          explanation: "Anchor on the Button and count clockwise. The earlier you act, the stronger your starting hand needs to be. Late position lets you widen and apply pressure.",
+          glossary: [
+            {term:"BTN", def:"Button – dealer position; acts last postflop."},
+            {term:"SB", def:"Small Blind – forced small bet; acts first postflop."},
+            {term:"BB", def:"Big Blind – forced big bet; last to act preflop."},
+            {term:"UTG", def:"Under the Gun – first to act preflop after blinds."},
+            {term:"CO", def:"Cutoff – seat to the right of Button."},
+            {term:"In Position (IP)", def:"You act after your opponent."},
+            {term:"Out of Position (OOP)", def:"You act before your opponent."},
+          ],
+          scenarios: [
+            { id:"s1", prompt:"Where is the Button relative to the blinds?", choices:[ {id:"a", text:"After SB/BB, before UTG", correct:true, why:"BTN sits clockwise before SB then BB."}, {id:"b", text:"Between UTG and MP", correct:false, why:"That’s a middle position."}, {id:"c", text:"Opposite the blinds", correct:false, why:"Table geometry varies; order does not."} ] },
+            { id:"s2", prompt:"Two seats clockwise from the Button is?", choices:[ {id:"a", text:"Big Blind (BB)", correct:true, why:"BTN → SB → BB."}, {id:"b", text:"Cutoff (CO)", correct:false, why:"CO is counterclockwise from BTN."}, {id:"c", text:"UTG+1", correct:false, why:"That’s after UTG."} ] },
+            { id:"s3", prompt:"You’re in SB vs BTN open. Biggest disadvantage?", choices:[ {id:"a", text:"Act first postflop with capped range", correct:true, why:"OOP with weaker calling range—prefer 3-bet or fold more."}, {id:"b", text:"You must shove or fold only", correct:false, why:"There are intermediate lines."}, {id:"c", text:"You act last postflop", correct:false, why:"SB acts first postflop."} ] },
+          ]
+        });
+
+        // 2. Position Exploitation
+        L.push({
+          id:"pos-exploit",
+          title:"Position Exploitation",
+          simpleRule:"Late position = attack more; early = respect strength.",
+          bullets:[
+            "Steal wider from CO/BTN versus tight blinds.",
+            "Isolation raises vs limpers when you’ll have position.",
+            "From blinds, avoid dominated flats; 3-bet or fold more vs frequent stealers.",
+            "Use position to apply pressure after checks.",
+          ],
+          explanation:"Exploit seat advantage: widen opens late, isolate weak limpers, punish capped ranges after checks. In the blinds, be selective and consider 3-betting aggressive stealers.",
+          glossary:[
+            {term:"Steal", def:"Raise to win blinds when action folds to you."},
+            {term:"Isolation (Iso)", def:"Raise over a limper to play heads-up in position."},
+            {term:"Dominated", def:"Your hand is often second-best if both connect."},
+            {term:"3-bet", def:"Re-raise preflop."},
+          ],
+          scenarios:[
+            { id:"s1", prompt:"It folds to you on BTN vs tight blinds. Best plan?", choices:[ {id:"a", text:"Open wide and pressure", correct:true, why:"Positional edge + tight blinds = profitable steals."}, {id:"b", text:"Limp everything", correct:false, why:"You surrender initiative."}, {id:"c", text:"Only open premiums", correct:false, why:"Too tight; you miss EV."} ] },
+            { id:"s2", prompt:"Loose limper in MP; you’re in CO. Best exploit?", choices:[ {id:"a", text:"Raise to isolate with hands that play well postflop", correct:true, why:"Heads-up in position vs weak range is great."}, {id:"b", text:"Overlimp everything", correct:false, why:"Gives great price to blinds; lose initiative."}, {id:"c", text:"Fold most hands", correct:false, why:"Single limp ≈ weak/passive."} ] },
+          ]
+        });
+
+        // 3. Bet Sizing Psychology
+        L.push({
+          id:"bet-psych",
+          title:"Bet Sizing Psychology",
+          simpleRule:"Size tells a story—match it to board and goal.",
+          bullets:["Half-pot is a solid default for value","Small on dry boards; bigger on wet","Overbets polarise (nuts or air)","Watch for size habits"],
+          explanation:"Think in narratives. On dry boards, small bets work. On coordinated boards, go larger to charge draws. Opponents reveal themselves via size patterns—exploit them.",
+          glossary:[
+            {term:"C‑bet", def:"Continuation bet by the preflop raiser."},
+            {term:"Dry board", def:"Disconnected, few draws (A‑7‑2 rainbow)."},
+            {term:"Wet board", def:"Connected/draw-heavy (J‑T‑9)."},
+            {term:"Overbet", def:"Bet larger than the pot."},
+            {term:"Thin value", def:"Betting with a slight edge to get called by worse."},
+          ],
+          scenarios:[
+            { id:"s1", prompt:"As PFR on A♠7♦2♣ heads-up. Default sizing?", choices:[ {id:"a", text:"Small c‑bet", correct:true, why:"Dry board—small folds out air and denies equity."}, {id:"b", text:"Pot bet", correct:false, why:"Overkill."}, {id:"c", text:"Always check", correct:false, why:"You often have ace advantage."} ] },
+            { id:"s2", prompt:"Multiway J♥T♥9♣ with top pair. Best philosophy?", choices:[ {id:"a", text:"Bigger bet to charge draws", correct:true, why:"Coordinated texture rewards larger sizing."}, {id:"b", text:"Min-bet to see", correct:false, why:"Gives great price to draws."}, {id:"c", text:"Always shove", correct:false, why:"Too extreme."} ] },
+          ]
+        });
+
+        // 4. Player Type Recognition
+        L.push({
+          id:"player-types",
+          title:"Player Type Recognition",
+          simpleRule:"Tag patterns, not one-offs.",
+          bullets:["TAG: fewer hands, higher pressure","LAG: many hands, barrels often","Rock: ultra-tight/passive","Fish: calls too wide"],
+          explanation:"Classify by repeated behaviour. Value-bet callers, steal from rocks, and trap aggro types with hands that realise well.",
+          glossary:[
+            {term:"TAG", def:"Tight‑Aggressive."},
+            {term:"LAG", def:"Loose‑Aggressive."},
+            {term:"Barrel", def:"Bet again on later streets."},
+            {term:"Value‑bet", def:"Bet expecting worse to call."},
+          ],
+          scenarios:[
+            { id:"s1", prompt:"Villain calls wide and hates folding to flop bets. Exploit?", choices:[ {id:"a", text:"Value-bet bigger; bluff less", correct:true, why:"Print vs callers; cut bluffs."}, {id:"b", text:"Three‑barrel bluff often", correct:false, why:"They call down."}, {id:"c", text:"Only shove preflop", correct:false, why:"Unnecessary."} ] },
+            { id:"s2", prompt:"TAG 3‑bets your UTG open. Likely strength?", choices:[ {id:"a", text:"Value‑heavy", correct:true, why:"Versus early opens, TAGs are strong (AQ+/JJ+ typical)."}, {id:"b", text:"Trash", correct:false, why:"Unlikely."}, {id:"c", text:"Always a bluff", correct:false, why:"Assume value until proven otherwise."} ] },
+          ]
+        });
+
+        // 5. Bluff Detection
+        L.push({
+          id:"bluff-detect",
+          title:"Bluff Detection",
+          simpleRule:"Forced strength looks weak; natural confidence looks strong.",
+          bullets:["Over‑acting often = weakness","Timing tells matter","Check story coherence","Sizing outliers are red flags"],
+          explanation:"Check whether their line fits the board runout. When draws miss and a passive player suddenly bombs, hero‑call more.",
+          glossary:[
+            {term:"Brick", def:"Card that doesn’t change the texture."},
+            {term:"Snap‑bet", def:"Very fast bet; pre‑decided."},
+            {term:"Line/Story", def:"Sequence of actions and what they represent."},
+            {term:"Bluff‑catcher", def:"Hand that only beats bluffs."},
+          ],
+          scenarios:[
+            { id:"s1", prompt:"Passive line → river overbet on a brick. Read?", choices:[ {id:"a", text:"Often polar; weight to bluffs—consider hero‑call", correct:true, why:"Story break after miss."}, {id:"b", text:"Always nuts", correct:false, why:"Overbets polarise; not always value."}, {id:"c", text:"Raise small to ‘see’", correct:false, why:"Turning bluff‑catcher into bluff."} ] },
+          ]
+        });
+
+        // 6. Board Texture Reading
+        L.push({
+          id:"board-texture",
+          title:"Board Texture Reading",
+          simpleRule:"Dry boards: small; wet boards: bigger and clearer.",
+          bullets:["Dry = disconnected","Wet = connected/draw‑heavy","Favour your range advantage","Slow down on monotone/paired without blockers"],
+          explanation:"Classify the flop instantly and size accordingly. Ask whose range it favours.",
+          glossary:[
+            {term:"Monotone", def:"All three flop cards same suit."},
+            {term:"Paired board", def:"One rank appears twice (Q‑Q‑4)."},
+            {term:"Range advantage", def:"One player’s range fits the board better."},
+            {term:"Blocker", def:"Card in your hand that reduces combos for villain."},
+          ],
+          scenarios:[
+            { id:"s1", prompt:"You raised; flop K♦5♣2♠ heads‑up. Plan?", choices:[ {id:"a", text:"Small c‑bet often", correct:true, why:"Favourable and dry."}, {id:"b", text:"Always check", correct:false, why:"You give up fold equity."}, {id:"c", text:"Only large bets", correct:false, why:"Save large for wet/polar spots."} ] },
+          ]
+        });
+
+        // 7. Pressure Spots
+        L.push({
+          id:"pressure",
+          title:"Pressure Spots",
+          simpleRule:"When they show weakness, apply believable pressure.",
+          bullets:["Two checks from PFR = green light","Attack capped ranges in position","Choose textures your story fits","Avoid ego wars OOP"],
+          explanation:"Great players recognise capped ranges and pick the right spots to fire.",
+          glossary:[
+            {term:"Capped", def:"Range missing the strongest hands."},
+            {term:"Semibluff", def:"Bluff with equity to improve."},
+            {term:"Green light", def:"Clear signal to stab."},
+          ],
+          scenarios:[
+            { id:"s1", prompt:"PFR checks flop and turn on K♣9♦3♠2♥; you’re IP with air. Move?", choices:[ {id:"a", text:"Bet turn or river—range looks capped", correct:true, why:"Two checks = weakness often."}, {id:"b", text:"Always check back", correct:false, why:"You miss profitable stabs."}, {id:"c", text:"Always shove river", correct:false, why:"Size to your story."} ] },
+          ]
+        });
+
+        // 8. Mental Game
+        L.push({
+          id:"mental",
+          title:"Mental Game",
+          simpleRule:"Breathe, observe, decide. Process over results.",
+          bullets:["Notice tilt triggers","Use micro‑resets","Set session intents","Track decisions, not outcomes"],
+          explanation:"Slow your breathing, sit tall, and default to simple rules when stressed: fold marginal OOP, value vs callers, break after big pots.",
+          glossary:[
+            {term:"Tilt", def:"Emotional state that worsens decisions."},
+            {term:"Micro‑reset", def:"Tiny routine to restore focus (breath/posture/walk)."},
+            {term:"Intent", def:"Simple focus for this session (e.g., play more in position)."},
+          ],
+          scenarios:[
+            { id:"s1", prompt:"Bad beat; you feel hot and rushed. What now?", choices:[ {id:"a", text:"Deep breath + short walk/reset", correct:true, why:"Interrupts tilt."}, {id:"b", text:"Play extra aggressive", correct:false, why:"Chasing losses compounds errors."}, {id:"c", text:"Announce revenge", correct:false, why:"Broadcasting emotion invites exploitation."} ] },
+          ]
+        });
+
+        return L;
+      }
+
+      ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+    </script>
+  </body>
 </html>
