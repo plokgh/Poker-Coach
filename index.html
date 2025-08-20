@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poker Coach</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-green-900 to-blue-900 text-white min-h-screen flex items-center justify-center">
+  <div id="root" class="w-full max-w-6xl p-4"></div>
+  <script type="text/babel" data-presets="react,env">
+    const { useState } = React;
+
+    function App() {
+      const [lesson, setLesson] = useState(0);
+      const [scenario, setScenario] = useState(0);
+      const [score, setScore] = useState(0);
+
+      const lessons = [
+        {
+          title: "Position Names & Visual Recognition",
+          simpleRule: "♠ Early = strong hands, Late = more freedom",
+          bullets: [
+            "Positions run clockwise",
+            "Dealer button (BTN) always before blinds",
+            "UTG = first to act preflop",
+            "BTN = best position postflop"
+          ],
+          glossary: {
+            "UTG": "Under the Gun – first to act before the flop",
+            "BTN": "Button – dealer position, last to act postflop",
+            "SB": "Small Blind – forced bet left of the Button",
+            "BB": "Big Blind – forced bet left of the SB",
+            "CO": "Cutoff – seat right before the Button",
+            "MP": "Middle Position – seats after UTG, before CO"
+          },
+          scenarios: [
+            {
+              question: "Where is the Button (BTN) relative to the blinds?",
+              options: ["After SB/BB, before UTG", "Between UTG and MP", "Opposite blinds"],
+              answer: 0,
+              explanation: "The Button is always clockwise from the blinds. After BTN acts, SB then BB."
+            },
+            {
+              question: "If you're 2 seats clockwise from UTG, what position are you?",
+              options: ["MP", "UTG+1", "CO"],
+              answer: 0,
+              explanation: "After UTG comes UTG+1, then MP. Two seats over = MP."
+            }
+          ]
+        },
+        {
+          title: "Position Exploitation",
+          simpleRule: "🎯 Late = attack more, Early = play tight",
+          bullets: [
+            "Steal blinds from CO/BTN",
+            "Isolate weak limpers",
+            "Play fewer hands early, more hands late"
+          ],
+          glossary: {
+            "Steal": "Raising to win blinds uncontested",
+            "Isolate": "Raise to play against one weaker opponent",
+            "Limp": "Calling the big blind instead of raising"
+          },
+          scenarios: [
+            {
+              question: "Why raise wider from the Button?",
+              options: ["You act last postflop", "To bluff more often", "Because blinds are weaker"],
+              answer: 0,
+              explanation: "Button is last to act after flop, giving maximum info advantage."
+            }
+          ]
+        }
+      ];
+
+      const current = lessons[lesson];
+      const currentScenario = current.scenarios[scenario];
+
+      function handleAnswer(i) {
+        if (i === currentScenario.answer) {
+          alert("✅ Correct! " + currentScenario.explanation);
+          setScore(score + 1);
+        } else {
+          alert("❌ Incorrect. " + currentScenario.explanation);
+        }
+        const next = scenario + 1;
+        if (next < current.scenarios.length) {
+          setScenario(next);
+        } else {
+          if (lesson + 1 < lessons.length) {
+            setLesson(lesson + 1);
+            setScenario(0);
+          }
+        }
+      }
+
+      return (
+        <div className="space-y-6">
+          <header className="flex justify-between items-center">
+            <h1 className="text-2xl font-bold">Poker Coach</h1>
+            <span>Score: {score}</span>
+          </header>
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h2 className="text-xl font-semibold">Lesson {lesson + 1}: {current.title}</h2>
+              <p className="mt-2 italic">Simple Rule: {current.simpleRule}</p>
+              <ul className="list-disc ml-6 mt-2 space-y-1">
+                {current.bullets.map((b,i)=>(<li key={i}>{b}</li>))}
+              </ul>
+              <h3 className="mt-4 font-semibold">Glossary:</h3>
+              <ul className="list-disc ml-6 mt-2 space-y-1">
+                {Object.entries(current.glossary).map(([k,v])=>(<li key={k}><strong>{k}</strong>: {v}</li>))}
+              </ul>
+            </div>
+            <div className="bg-black/40 p-4 rounded-xl">
+              <p className="mb-4">{currentScenario.question}</p>
+              <div className="space-y-2">
+                {currentScenario.options.map((opt,i)=>(
+                  <button key={i} onClick={()=>handleAnswer(i)} className="w-full bg-blue-700 hover:bg-blue-600 px-3 py-2 rounded">
+                    {opt}
+                  </button>
+                ))}
+              </div>
+              <p className="text-sm mt-4">Scenario {scenario+1} of {current.scenarios.length}</p>
+            </div>
+          </section>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>
