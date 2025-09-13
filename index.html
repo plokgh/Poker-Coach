@@ -3,130 +3,234 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Poker Coach</title>
+  <title>Poker Training Game</title>
   <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gradient-to-br from-green-900 to-blue-900 text-white min-h-screen flex items-center justify-center">
-  <div id="root" class="w-full max-w-6xl p-4"></div>
+<body class="bg-green-900 text-white min-h-screen p-4">
+  <div id="root" class="max-w-7xl mx-auto"></div>
   <script type="text/babel" data-presets="react,env">
-    const { useState } = React;
 
-    function App() {
-      const [lesson, setLesson] = useState(0);
-      const [scenario, setScenario] = useState(0);
-      const [score, setScore] = useState(0);
+    const POSITION_NAMES = {
+      EP: "Early Position",
+      MP: "Middle Position",
+      CO: "Cutoff",
+      BTN: "Button",
+      SB: "Small Blind",
+      BB: "Big Blind"
+    };
 
-      const lessons = [
+    const LEGEND = {
+      EP: "Early Position",
+      MP: "Middle Position",
+      CO: "Cutoff",
+      BTN: "Button",
+      SB: "Small Blind",
+      BB: "Big Blind",
+      "BB (bet)": "One big blind, standard unit of betting",
+      Aggressor: "Player who made the first bet or raise"
+    };
+
+    const scenarios = [
+      {
+        description: "Early Position raises to 3 big blinds. You are in the Cutoff with A♠ K♦ and a medium stack.",
+        holeCards: "A♠ K♦",
+        hero: "CO",
+        stack: "Medium",
+        aggressor: "EP",
+        bets: {EP: "3 BB"},
+        active: ["EP", "CO"],
+        recommendation: "Re-raise",
+        explanation: "A♠ K♦ is strong. Against an Early Position raise, re-raise to apply pressure and build the pot."
+      },
+      {
+        description: "Everyone folds to you on the Button. You hold 7♠ 7♦ with a deep stack.",
+        holeCards: "7♠ 7♦",
+        hero: "BTN",
+        stack: "Deep",
+        aggressor: null,
+        bets: {},
+        active: ["BTN"],
+        recommendation: "Raise",
+        explanation: "With a deep stack on the Button, raising helps steal blinds and build value with a pair."
+      },
+      {
+        description: "Cutoff raises to 2.5 big blinds. You're in the Big Blind with Q♣ 4♣ and a short stack.",
+        holeCards: "Q♣ 4♣",
+        hero: "BB",
+        stack: "Short",
+        aggressor: "CO",
+        bets: {CO: "2.5 BB"},
+        active: ["CO", "BB"],
+        recommendation: "Fold",
+        explanation: "Q♣ 4♣ is too weak to continue out of position with a short stack."
+      }
+    ];
+
+    const POSITIONS = ["EP","MP","CO","BTN","SB","BB"];
+    const STACKS = ["Deep","Medium","Short"];
+    const ACTIONS = ["Fold","Call","Raise","Re-raise"];
+
+    function Legend() {
+      return (
+        <aside className="bg-gray-800 p-4 rounded w-60">
+          <h2 className="font-bold mb-2">Legend</h2>
+          <ul className="text-sm space-y-1">
+            {Object.entries(LEGEND).map(([abbr, full]) => (
+              <li key={abbr}><strong>{abbr}</strong> = {full}</li>
+            ))}
+          </ul>
+        </aside>
+      );
+    }
+
+    function Table({scenario}) {
+      const seats = [
+        {id:"EP", style:{top:"5%", left:"50%"}},
+        {id:"MP", style:{top:"25%", left:"85%"}},
+        {id:"CO", style:{top:"60%", left:"85%"}},
+        {id:"BTN", style:{top:"85%", left:"50%"}},
+        {id:"SB", style:{top:"60%", left:"15%"}},
+        {id:"BB", style:{top:"25%", left:"15%"}}
+      ];
+      return (
+        <div className="relative bg-green-700 rounded-full w-full h-96">
+          {seats.map(seat => {
+            const active = scenario.active.includes(seat.id);
+            const bet = scenario.bets[seat.id];
+            const isHero = seat.id === scenario.hero;
+            const isAggressor = seat.id === scenario.aggressor;
+            return (
+              <div key={seat.id}
+                className={`absolute text-center text-xs w-24 p-2 rounded transform -translate-x-1/2 -translate-y-1/2 ${active? "bg-yellow-600":"bg-gray-700 opacity-60"}`}
+                style={seat.style}>
+                <div className={`${isHero? "font-bold underline":""}`}>
+                  {POSITION_NAMES[seat.id]} ({seat.id})
+                </div>
+                {isHero && <div className="mt-1">Cards: {scenario.holeCards}</div>}
+                {bet && <div className="mt-1">Bet: {bet}</div>}
+                {isAggressor && <div className="mt-1 text-red-300">Aggressor</div>}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    function Checklist({scenario, step, onAnswer}) {
+      const steps = [
         {
-          title: "Position Names & Visual Recognition",
-          simpleRule: "♠ Early = strong hands, Late = more freedom",
-          bullets: [
-            "Positions run clockwise",
-            "Dealer button (BTN) always before blinds",
-            "UTG = first to act preflop",
-            "BTN = best position postflop"
-          ],
-          glossary: {
-            "UTG": "Under the Gun – first to act before the flop",
-            "BTN": "Button – dealer position, last to act postflop",
-            "SB": "Small Blind – forced bet left of the Button",
-            "BB": "Big Blind – forced bet left of the SB",
-            "CO": "Cutoff – seat right before the Button",
-            "MP": "Middle Position – seats after UTG, before CO"
-          },
-          scenarios: [
-            {
-              question: "Where is the Button (BTN) relative to the blinds?",
-              options: ["After SB/BB, before UTG", "Between UTG and MP", "Opposite blinds"],
-              answer: 0,
-              explanation: "The Button is always clockwise from the blinds. After BTN acts, SB then BB."
-            },
-            {
-              question: "If you're 2 seats clockwise from UTG, what position are you?",
-              options: ["MP", "UTG+1", "CO"],
-              answer: 0,
-              explanation: "After UTG comes UTG+1, then MP. Two seats over = MP."
-            }
-          ]
+          label: "Identify your table position",
+          options: POSITIONS.map(id=>({id, label:`${POSITION_NAMES[id]} (${id})`})),
+          correct: scenario.hero,
+          feedback: () => `You are in the ${POSITION_NAMES[scenario.hero]} (${scenario.hero}).`
         },
         {
-          title: "Position Exploitation",
-          simpleRule: "🎯 Late = attack more, Early = play tight",
-          bullets: [
-            "Steal blinds from CO/BTN",
-            "Isolate weak limpers",
-            "Play fewer hands early, more hands late"
-          ],
-          glossary: {
-            "Steal": "Raising to win blinds uncontested",
-            "Isolate": "Raise to play against one weaker opponent",
-            "Limp": "Calling the big blind instead of raising"
-          },
-          scenarios: [
-            {
-              question: "Why raise wider from the Button?",
-              options: ["You act last postflop", "To bluff more often", "Because blinds are weaker"],
-              answer: 0,
-              explanation: "Button is last to act after flop, giving maximum info advantage."
-            }
-          ]
+          label: "Assess your stack size",
+          options: STACKS.map(s=>({id:s, label:s})),
+          correct: scenario.stack,
+          feedback: () => `You have a ${scenario.stack.toLowerCase()} stack.`
+        },
+        {
+          label: "Note the position of the aggressor",
+          options: [...POSITIONS.map(id=>({id, label:`${POSITION_NAMES[id]} (${id})`})), {id:"none", label:"No aggressor"}],
+          correct: scenario.aggressor || "none",
+          feedback: () => scenario.aggressor ? `The aggressor is ${POSITION_NAMES[scenario.aggressor]} (${scenario.aggressor}).` : "There has been no raise yet."
+        },
+        {
+          label: "Decide action",
+          options: ACTIONS.map(a=>({id:a, label:a})),
+          correct: scenario.recommendation,
+          feedback: () => `Best practice: ${scenario.recommendation}. ${scenario.explanation}`
         }
       ];
 
-      const current = lessons[lesson];
-      const currentScenario = current.scenarios[scenario];
+      const current = steps[step];
 
-      function handleAnswer(i) {
-        if (i === currentScenario.answer) {
-          alert("✅ Correct! " + currentScenario.explanation);
-          setScore(score + 1);
+      return (
+        <div className="mt-4">
+          <h3 className="font-semibold mb-2">{current.label}</h3>
+          <div className="space-y-2">
+            {current.options.map(opt => (
+              <button key={opt.id} onClick={()=>onAnswer(opt.id, current.correct, current.feedback)}
+                className="w-full bg-blue-700 hover:bg-blue-600 px-3 py-2 rounded">
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [scenarioIndex, setScenarioIndex] = React.useState(0);
+      const [step, setStep] = React.useState(0);
+      const [message, setMessage] = React.useState("");
+      const [answered, setAnswered] = React.useState(false);
+      const [done, setDone] = React.useState(false);
+
+      const scenario = scenarios[scenarioIndex];
+
+      function handleAnswer(choice, correct, feedback) {
+        if (choice === correct) {
+          setMessage("✅ Correct. " + feedback());
         } else {
-          alert("❌ Incorrect. " + currentScenario.explanation);
+          setMessage("❌ Not quite. " + feedback());
         }
-        const next = scenario + 1;
-        if (next < current.scenarios.length) {
-          setScenario(next);
+        setAnswered(true);
+      }
+
+      function nextStep() {
+        setMessage("");
+        setAnswered(false);
+        if (step < 3) {
+          setStep(step + 1);
         } else {
-          if (lesson + 1 < lessons.length) {
-            setLesson(lesson + 1);
-            setScenario(0);
+          if (scenarioIndex + 1 < scenarios.length) {
+            setScenarioIndex(scenarioIndex + 1);
+            setStep(0);
+          } else {
+            setDone(true);
           }
         }
       }
 
+      if (done) {
+        return (
+          <div className="text-center space-y-4">
+            <h1 className="text-3xl font-bold">Training Complete</h1>
+            <p className="text-xl">Great job running the checklist!</p>
+          </div>
+        );
+      }
+
       return (
-        <div className="space-y-6">
-          <header className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold">Poker Coach</h1>
-            <span>Score: {score}</span>
-          </header>
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h2 className="text-xl font-semibold">Lesson {lesson + 1}: {current.title}</h2>
-              <p className="mt-2 italic">Simple Rule: {current.simpleRule}</p>
-              <ul className="list-disc ml-6 mt-2 space-y-1">
-                {current.bullets.map((b,i)=>(<li key={i}>{b}</li>))}
-              </ul>
-              <h3 className="mt-4 font-semibold">Glossary:</h3>
-              <ul className="list-disc ml-6 mt-2 space-y-1">
-                {Object.entries(current.glossary).map(([k,v])=>(<li key={k}><strong>{k}</strong>: {v}</li>))}
-              </ul>
-            </div>
-            <div className="bg-black/40 p-4 rounded-xl">
-              <p className="mb-4">{currentScenario.question}</p>
-              <div className="space-y-2">
-                {currentScenario.options.map((opt,i)=>(
-                  <button key={i} onClick={()=>handleAnswer(i)} className="w-full bg-blue-700 hover:bg-blue-600 px-3 py-2 rounded">
-                    {opt}
-                  </button>
-                ))}
+        <div className="flex flex-col md:flex-row gap-4">
+          <Legend />
+          <div className="flex-1 space-y-4">
+            <h1 className="text-2xl font-bold">Poker Training Game</h1>
+            <p>{scenario.description}</p>
+            <Table scenario={scenario} />
+            {!answered && <Checklist scenario={scenario} step={step} onAnswer={handleAnswer} />}
+            {answered && (
+              <div className="mt-4">
+                <p>{message}</p>
+                {step === 3 && (
+                  <ul className="list-disc ml-6 mt-2 text-sm">
+                    <li>Position: {POSITION_NAMES[scenario.hero]} ({scenario.hero})</li>
+                    <li>Stack: {scenario.stack}</li>
+                    <li>Aggressor: {scenario.aggressor ? POSITION_NAMES[scenario.aggressor] + ` (${scenario.aggressor})` : "None"}</li>
+                    <li>Action: {scenario.recommendation}</li>
+                  </ul>
+                )}
+                <button onClick={nextStep} className="mt-3 bg-blue-700 hover:bg-blue-600 px-3 py-2 rounded">
+                  {step === 3 ? "Next Scenario" : "Next Step"}
+                </button>
               </div>
-              <p className="text-sm mt-4">Scenario {scenario+1} of {current.scenarios.length}</p>
-            </div>
-          </section>
+            )}
+          </div>
         </div>
       );
     }
